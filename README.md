@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Relevance
 
-## Getting Started
+Meeting prep assistant. Pick an upcoming Google Calendar event, press **Generate brief**, and the app collects
+Monday.com, Gmail, Semrush and BrightLocal data for the matched client, then writes a bullet summary and a
+full report you can copy or download as PDF.
 
-First, run the development server:
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Everything runs in **mock mode** out of the box. No API keys needed for the demo.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+Calendar event ──► matchClient() ──► client record (name, domain, board id, ...)
+                                        │
+          ┌─────────────┬───────────────┼───────────────┬──────────────┐
+          ▼             ▼               ▼               ▼              │
+      Monday.com      Gmail          Semrush       BrightLocal         │
+          └─────────────┴───────────────┴───────────────┘              │
+                                        ▼                              │
+                                  summarize() ──► Meeting brief ◄──────┘
+```
 
-## Learn More
+| Piece | File |
+| --- | --- |
+| Shared types | `src/lib/types.ts` |
+| Mock data (clients, events, per-source data) | `src/lib/mock/data.ts` |
+| Event to client matching | `src/lib/match.ts` |
+| One adapter per source, each with `mock` + `live` branches | `src/lib/sources/*.ts` |
+| Summary builder (rule-based now, Claude later) | `src/lib/summarize.ts` |
+| Mode switches + required env vars | `src/lib/config.ts` |
+| API: list events | `GET /api/events` |
+| API: collect one source | `POST /api/sources/:source` `{ eventId }` |
+| API: build the brief | `POST /api/brief` `{ eventId, results }` |
+| Dashboard UI | `src/components/Dashboard.tsx` |
+| Connection status page | `/settings` |
 
-To learn more about Next.js, take a look at the following resources:
+## Going live, one panel at a time
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Each source has a `live*` function that currently throws "not implemented". To make a panel real:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Get the credentials (see below) and put them in `.env.local` (copy from `.env.example`).
+2. Set that source's `*_MODE=live`.
+3. Implement the `live*` function in `src/lib/sources/<source>.ts` so it returns the same shape as the mock.
+4. Restart `npm run dev`. The panel badge flips from `mock` to `live`.
 
-## Deploy on Vercel
+### Where to get each API key
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Google Calendar + Gmail** (one OAuth app for both)
+1. https://console.cloud.google.com → create a project.
+2. APIs & Services → Library → enable **Google Calendar API** and **Gmail API**.
+3. APIs & Services → OAuth consent screen → Internal (if Google Workspace) or External + add your email as test user.
+4. APIs & Services → Credentials → Create credentials → **OAuth client ID** → Web application.
+   Add redirect URI `http://localhost:3000/api/auth/google/callback`.
+5. Copy **Client ID** and **Client secret** into `.env.local`. The app will do the one-time sign-in
+   and store the refresh token.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Monday.com**
+1. Click your avatar (bottom left) → **Developers** → **My access tokens** → Show → copy.
+2. Paste as `MONDAY_API_TOKEN`.
+
+How the Monday data is used (board ids are in `.env.local`, column ids in `src/lib/monday/*.ts`):
+- **CRM → Accounts** board is the client list. Accounts with status Active or Onboarding become clients.
+  The client's email domain comes from the linked Contacts, which is what Gmail and Semrush match on.
+- **PMO → Retainer** and **PMO → Non Retainer** boards hold the work. Items linked to the account are
+  fetched, and their subitems become the tasks (owner, status, due date, latest update).
+- Helper routes: `GET /api/clients` (the live client list) and `GET /api/monday/boards` (boards + columns).
+- Accounts with no contact email show as "no domain" in the client picker. Add a contact with an email
+  on the Accounts board to fix matching for that client.
+
+**Semrush**
+1. https://www.semrush.com/api-documentation/ → your API key is on the **API units** page under Subscription info.
+2. API access needs the Business plan (or API units add-on). Check your plan first.
+3. Paste as `SEMRUSH_API_KEY`.
+
+**BrightLocal**
+1. Account → **API Access** (https://tools.brightlocal.com/seo-tools/admin/api) → generate key + secret.
+2. Paste as `BRIGHTLOCAL_API_KEY` and `BRIGHTLOCAL_API_SECRET`.
+
+**Claude (AI summary)**
+1. https://console.anthropic.com → API keys → create.
+2. Paste as `ANTHROPIC_API_KEY`.
+
+## Build order
+
+1. Google Calendar (OAuth flow, list upcoming events from one calendar)
+2. Gmail (reuse the Google OAuth app, add the read-only scope)
+3. Monday.com
+4. Semrush
+5. BrightLocal
+6. AI summary with Claude
+7. Move the client list from `mock/data.ts` to a database or a Monday "Clients" board
