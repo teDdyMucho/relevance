@@ -87,6 +87,28 @@ How the Monday data is used (board ids are in `.env.local`, column ids in `src/l
 1. https://console.anthropic.com → API keys → create.
 2. Paste as `ANTHROPIC_API_KEY`.
 
+## Deploying (Netlify)
+
+The site deploys from GitHub (`master`) automatically. Three things differ from local dev:
+
+1. **Environment variables.** `.env.local` is not committed, so every variable must be set in
+   Netlify → Site configuration → Environment variables. Copy the keys from `.env.example`:
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CALENDAR_MODE`, `GMAIL_MODE`, `MONDAY_MODE`,
+   `MONDAY_API_TOKEN`, `MONDAY_*_BOARD_ID`, `MONDAY_ACCOUNT_STATUSES`, `COMPANY_EMAIL_DOMAIN`,
+   `COMPANY_NAME`, `SEMRUSH_MODE`, `SEMRUSH_API_KEY`, `BRIGHTLOCAL_MODE`, `BRIGHTLOCAL_API_KEY`,
+   plus `APP_USER` / `APP_PASSWORD` (see below). Redeploy after changing them.
+2. **Google redirect URI.** Add `https://<your-site>.netlify.app/api/auth/google/callback` to the
+   OAuth client's Authorized redirect URIs in Google Cloud Console. The app builds the redirect
+   from the request origin, so localhost and the live site can both be registered.
+3. **Google token storage.** Netlify functions have no persistent disk, so after "Connect Google"
+   the refresh token is kept in an encrypted cookie (works for that browser). To make it permanent
+   for everyone, open Settings → "Show refresh token", copy it into `GOOGLE_REFRESH_TOKEN` in
+   Netlify's environment variables, and redeploy.
+
+**Password gate.** The site shows client data, so set `APP_PASSWORD` (and optionally `APP_USER`,
+default `admin`) in Netlify. The browser then asks for the username/password once. Leave it unset
+locally to keep dev open.
+
 ## Build order
 
 1. Google Calendar (OAuth flow, list upcoming events from one calendar)

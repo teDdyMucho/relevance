@@ -30,7 +30,11 @@ export default async function SettingsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">
           Every integration runs in <b>mock</b> mode until its env vars are set and its <code>*_MODE</code> is{" "}
-          <code>live</code>. Edit <code>.env.local</code> and restart the dev server.
+          <code>live</code>. Locally: edit <code>.env.local</code> and restart. Hosted: set the same variables in the
+          host&apos;s environment settings and redeploy.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Password gate: {process.env.APP_PASSWORD ? "on (APP_PASSWORD is set)" : "off (set APP_PASSWORD to protect this site)"}.
         </p>
       </div>
 
@@ -50,7 +54,7 @@ export default async function SettingsPage({
             Google sign-in failed: {sp.message}
           </div>
         )}
-        <GoogleConnect configured={googleConfigured} connected={Boolean(token)} email={googleEmail} />
+        <GoogleConnect configured={googleConfigured} connected={Boolean(token)} email={googleEmail} source={token?.source} />
       </section>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exchangeCode } from "@/lib/google/oauth";
+import { googleRedirectUri, publicOrigin } from "@/lib/request";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  const settings = new URL("/settings", url.origin);
+  const settings = new URL("/settings", publicOrigin(req));
 
   if (error || !code) {
     settings.searchParams.set("google", "error");
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const token = await exchangeCode(code);
+    const token = await exchangeCode(code, googleRedirectUri(req));
     settings.searchParams.set("google", "connected");
     if (token.email) settings.searchParams.set("email", token.email);
   } catch (err) {
